@@ -1,27 +1,26 @@
-"""Schema definitions for representing agent actions, observations, and return values.
+"""用于表示代理动作、观察结果和返回值的模式定义。
 
-**ATTENTION** The schema definitions are provided for backwards compatibility.
+**注意** 这些模式定义是为了向后兼容而提供的。
 
-    New agents should be built using the langgraph library
-    (https://github.com/langchain-ai/langgraph)), which provides a simpler
-    and more flexible way to define agents.
+    新的代理应该使用 langgraph 库构建
+    (https://github.com/langchain-ai/langgraph))，它提供了更简单
+    和更灵活的方式来定义代理。
 
-    Please see the migration guide for information on how to migrate existing
-    agents to modern langgraph agents:
+    请参阅迁移指南了解如何将现有代理迁移到现代 langgraph 代理：
     https://python.langchain.com/docs/how_to/migrate_agent/
 
-Agents use language models to choose a sequence of actions to take.
+代理使用语言模型来选择要执行的动作序列。
 
-A basic agent works in the following manner:
+基本代理的工作方式如下：
 
-1. Given a prompt an agent uses an LLM to request an action to take
-   (e.g., a tool to run).
-2. The agent executes the action (e.g., runs the tool), and receives an observation.
-3. The agent returns the observation to the LLM, which can then be used to generate
-   the next action.
-4. When the agent reaches a stopping condition, it returns a final return value.
+1. 给定提示，代理使用 LLM 请求要执行的动作
+   (例如，运行工具)。
+2. 代理执行动作（例如，运行工具），并接收观察结果。
+3. 代理将观察结果返回给 LLM，然后可以用来生成
+   下一个动作。
+4. 当代理达到停止条件时，它返回最终返回值。
 
-The schemas for the agents themselves are defined in langchain.agents.agent.
+代理本身的模式定义在 langchain.agents.agent 中。
 """
 
 from __future__ import annotations
@@ -40,152 +39,147 @@ from langchain_core.messages import (
 
 
 class AgentAction(Serializable):
-    """Represents a request to execute an action by an agent.
+    """表示代理执行动作的请求。
 
-    The action consists of the name of the tool to execute and the input to pass
-    to the tool. The log is used to pass along extra information about the action.
+    动作包括要执行的工具名称和传递给工具的输入。
+    日志用于传递关于动作的额外信息。
     """
 
     tool: str
-    """The name of the Tool to execute."""
+    """要执行的工具名称。"""
     tool_input: Union[str, dict]
-    """The input to pass in to the Tool."""
+    """传递给工具的输入。"""
     log: str
-    """Additional information to log about the action.
-    This log can be used in a few ways. First, it can be used to audit
-    what exactly the LLM predicted to lead to this (tool, tool_input).
-    Second, it can be used in future iterations to show the LLMs prior
-    thoughts. This is useful when (tool, tool_input) does not contain
-    full information about the LLM prediction (for example, any `thought`
-    before the tool/tool_input)."""
+    """关于动作的额外日志信息。
+    这个日志可以用于几种方式。首先，它可以用于审计
+    LLM 预测导致此 (tool, tool_input) 的确切内容。
+    其次，它可以在未来的迭代中用于显示 LLM 的先前
+    思考。这在 (tool, tool_input) 不包含
+    LLM 预测的完整信息时很有用（例如，工具/工具输入之前的任何 `thought`）。"""
     type: Literal["AgentAction"] = "AgentAction"
 
-    # Override init to support instantiation by position for backward compat.
+    # 重写 init 以支持按位置实例化，用于向后兼容。
     def __init__(
         self, tool: str, tool_input: Union[str, dict], log: str, **kwargs: Any
     ):
-        """Create an AgentAction.
+        """创建 AgentAction。
 
-        Args:
-            tool: The name of the tool to execute.
-            tool_input: The input to pass in to the Tool.
-            log: Additional information to log about the action.
+        参数:
+            tool: 要执行的工具名称。
+            tool_input: 传递给工具的输入。
+            log: 关于动作的额外日志信息。
         """
         super().__init__(tool=tool, tool_input=tool_input, log=log, **kwargs)
 
     @classmethod
     def is_lc_serializable(cls) -> bool:
-        """AgentAction is serializable.
+        """AgentAction 是可序列化的。
 
-        Returns:
+        返回:
             True
         """
         return True
 
     @classmethod
     def get_lc_namespace(cls) -> list[str]:
-        """Get the namespace of the langchain object.
+        """获取 langchain 对象的命名空间。
 
-        Returns:
+        返回:
             ``["langchain", "schema", "agent"]``
         """
         return ["langchain", "schema", "agent"]
 
     @property
     def messages(self) -> Sequence[BaseMessage]:
-        """Return the messages that correspond to this action."""
+        """返回与此动作对应的消息。"""
         return _convert_agent_action_to_messages(self)
 
 
 class AgentActionMessageLog(AgentAction):
-    """Representation of an action to be executed by an agent.
+    """表示代理要执行的动作。
 
-    This is similar to AgentAction, but includes a message log consisting of
-    chat messages. This is useful when working with ChatModels, and is used
-    to reconstruct conversation history from the agent's perspective.
+    这与 AgentAction 类似，但包含由聊天消息组成的消息日志。
+    这在处理 ChatModels 时很有用，用于从代理的角度重建对话历史。
     """
 
     message_log: Sequence[BaseMessage]
-    """Similar to log, this can be used to pass along extra
-    information about what exact messages were predicted by the LLM
-    before parsing out the (tool, tool_input). This is again useful
-    if (tool, tool_input) cannot be used to fully recreate the LLM
-    prediction, and you need that LLM prediction (for future agent iteration).
-    Compared to `log`, this is useful when the underlying LLM is a
-    ChatModel (and therefore returns messages rather than a string)."""
-    # Ignoring type because we're overriding the type from AgentAction.
-    # And this is the correct thing to do in this case.
-    # The type literal is used for serialization purposes.
+    """类似于 log，这可以用于传递关于 LLM 在解析出 (tool, tool_input) 之前
+    预测的确切消息的额外信息。这在 (tool, tool_input) 不能用于完全重建
+    LLM 预测，而您需要该 LLM 预测（用于未来的代理迭代）时再次有用。
+    与 `log` 相比，这在底层 LLM 是 ChatModel（因此返回消息而不是字符串）时很有用。"""
+    # 忽略类型，因为我们正在重写 AgentAction 的类型。
+    # 在这种情况下这是正确的做法。
+    # 类型字面量用于序列化目的。
     type: Literal["AgentActionMessageLog"] = "AgentActionMessageLog"  # type: ignore[assignment]
 
 
 class AgentStep(Serializable):
-    """Result of running an AgentAction."""
+    """运行 AgentAction 的结果。"""
 
     action: AgentAction
-    """The AgentAction that was executed."""
+    """已执行的 AgentAction。"""
     observation: Any
-    """The result of the AgentAction."""
+    """AgentAction 的结果。"""
 
     @property
     def messages(self) -> Sequence[BaseMessage]:
-        """Messages that correspond to this observation."""
+        """与此观察结果对应的消息。"""
         return _convert_agent_observation_to_messages(self.action, self.observation)
 
 
 class AgentFinish(Serializable):
-    """Final return value of an ActionAgent.
+    """ActionAgent 的最终返回值。
 
-    Agents return an AgentFinish when they have reached a stopping condition.
+    当代理达到停止条件时，它们返回 AgentFinish。
     """
 
     return_values: dict
-    """Dictionary of return values."""
+    """返回值的字典。"""
     log: str
-    """Additional information to log about the return value.
-    This is used to pass along the full LLM prediction, not just the parsed out
-    return value. For example, if the full LLM prediction was
-    `Final Answer: 2` you may want to just return `2` as a return value, but pass
-    along the full string as a `log` (for debugging or observability purposes).
+    """关于返回值的额外日志信息。
+    这用于传递完整的 LLM 预测，而不仅仅是解析出的
+    返回值。例如，如果完整的 LLM 预测是
+    `Final Answer: 2`，您可能只想返回 `2` 作为返回值，但传递
+    完整字符串作为 `log`（用于调试或可观察性目的）。
     """
     type: Literal["AgentFinish"] = "AgentFinish"
 
     def __init__(self, return_values: dict, log: str, **kwargs: Any):
-        """Override init to support instantiation by position for backward compat."""
+        """重写 init 以支持按位置实例化，用于向后兼容。"""
         super().__init__(return_values=return_values, log=log, **kwargs)
 
     @classmethod
     def is_lc_serializable(cls) -> bool:
-        """Return True as this class is serializable."""
+        """返回 True，因为此类是可序列化的。"""
         return True
 
     @classmethod
     def get_lc_namespace(cls) -> list[str]:
-        """Get the namespace of the langchain object.
+        """获取 langchain 对象的命名空间。
 
-        Returns:
+        返回:
             ``["langchain", "schema", "agent"]``
         """
         return ["langchain", "schema", "agent"]
 
     @property
     def messages(self) -> Sequence[BaseMessage]:
-        """Messages that correspond to this observation."""
+        """与此观察结果对应的消息。"""
         return [AIMessage(content=self.log)]
 
 
 def _convert_agent_action_to_messages(
     agent_action: AgentAction,
 ) -> Sequence[BaseMessage]:
-    """Convert an agent action to a message.
+    """将代理动作转换为消息。
 
-    This code is used to reconstruct the original AI message from the agent action.
+    此代码用于从代理动作重建原始 AI 消息。
 
-    Args:
-        agent_action: Agent action to convert.
+    参数:
+        agent_action: 要转换的代理动作。
 
-    Returns:
-        AIMessage that corresponds to the original tool invocation.
+    返回:
+        对应于原始工具调用的 AIMessage。
     """
     if isinstance(agent_action, AgentActionMessageLog):
         return agent_action.message_log
@@ -195,16 +189,16 @@ def _convert_agent_action_to_messages(
 def _convert_agent_observation_to_messages(
     agent_action: AgentAction, observation: Any
 ) -> Sequence[BaseMessage]:
-    """Convert an agent action to a message.
+    """将代理动作转换为消息。
 
-    This code is used to reconstruct the original AI message from the agent action.
+    此代码用于从代理动作重建原始 AI 消息。
 
-    Args:
-        agent_action: Agent action to convert.
-        observation: Observation to convert to a message.
+    参数:
+        agent_action: 要转换的代理动作。
+        observation: 要转换为消息的观察结果。
 
-    Returns:
-        AIMessage that corresponds to the original tool invocation.
+    返回:
+        对应于原始工具调用的 AIMessage。
     """
     if isinstance(agent_action, AgentActionMessageLog):
         return [_create_function_message(agent_action, observation)]
@@ -220,14 +214,14 @@ def _convert_agent_observation_to_messages(
 def _create_function_message(
     agent_action: AgentAction, observation: Any
 ) -> FunctionMessage:
-    """Convert agent action and observation into a function message.
+    """将代理动作和观察结果转换为函数消息。
 
-    Args:
-        agent_action: the tool invocation request from the agent.
-        observation: the result of the tool invocation.
+    参数:
+        agent_action: 来自代理的工具调用请求。
+        observation: 工具调用的结果。
 
-    Returns:
-        FunctionMessage that corresponds to the original tool invocation.
+    返回:
+        对应于原始工具调用的 FunctionMessage。
     """
     if not isinstance(observation, str):
         try:

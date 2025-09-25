@@ -1,8 +1,8 @@
-"""**Memory** maintains Chain state, incorporating context from past runs.
+"""**记忆**维护链的状态，整合来自过去运行的上下文。
 
-This module contains memory abstractions from LangChain v0.0.x.
+此模块包含来自 LangChain v0.0.x 的记忆抽象。
 
-These abstractions are now deprecated and will be removed in LangChain v1.0.0.
+这些抽象现在已被弃用，将在 LangChain v1.0.0 中移除。
 """
 
 from __future__ import annotations
@@ -21,21 +21,19 @@ from langchain_core.runnables import run_in_executor
     since="0.3.3",
     removal="1.0.0",
     message=(
-        "Please see the migration guide at: "
+        "请查看迁移指南："
         "https://python.langchain.com/docs/versions/migrating_memory/"
     ),
 )
 class BaseMemory(Serializable, ABC):
-    """Abstract base class for memory in Chains.
+    """链中记忆的抽象基类。
 
-    Memory refers to state in Chains. Memory can be used to store information about
-        past executions of a Chain and inject that information into the inputs of
-        future executions of the Chain. For example, for conversational Chains Memory
-        can be used to store conversations and automatically add them to future model
-        prompts so that the model has the necessary context to respond coherently to
-        the latest input.
+    记忆指的是链中的状态。记忆可用于存储关于链过去执行的信息，
+        并将该信息注入到链的未来执行的输入中。例如，对于对话链，
+        记忆可用于存储对话并自动将它们添加到未来的模型提示中，
+        以便模型具有必要的上下文来连贯地响应最新的输入。
 
-    Example:
+    示例:
         .. code-block:: python
 
             class SimpleMemory(BaseMemory):
@@ -67,54 +65,54 @@ class BaseMemory(Serializable, ABC):
     @property
     @abstractmethod
     def memory_variables(self) -> list[str]:
-        """The string keys this memory class will add to chain inputs."""
+        """此记忆类将添加到链输入中的字符串键。"""
 
     @abstractmethod
     def load_memory_variables(self, inputs: dict[str, Any]) -> dict[str, Any]:
-        """Return key-value pairs given the text input to the chain.
+        """根据链的文本输入返回键值对。
 
-        Args:
-            inputs: The inputs to the chain.
+        参数:
+            inputs: 链的输入。
 
-        Returns:
-            A dictionary of key-value pairs.
+        返回:
+            键值对的字典。
         """
 
     async def aload_memory_variables(self, inputs: dict[str, Any]) -> dict[str, Any]:
-        """Async return key-value pairs given the text input to the chain.
+        """根据链的文本输入异步返回键值对。
 
-        Args:
-            inputs: The inputs to the chain.
+        参数:
+            inputs: 链的输入。
 
-        Returns:
-            A dictionary of key-value pairs.
+        返回:
+            键值对的字典。
         """
         return await run_in_executor(None, self.load_memory_variables, inputs)
 
     @abstractmethod
     def save_context(self, inputs: dict[str, Any], outputs: dict[str, str]) -> None:
-        """Save the context of this chain run to memory.
+        """将此次链运行的上下文保存到记忆中。
 
-        Args:
-            inputs: The inputs to the chain.
-            outputs: The outputs of the chain.
+        参数:
+            inputs: 链的输入。
+            outputs: 链的输出。
         """
 
     async def asave_context(
         self, inputs: dict[str, Any], outputs: dict[str, str]
     ) -> None:
-        """Async save the context of this chain run to memory.
+        """将此次链运行的上下文异步保存到记忆中。
 
-        Args:
-            inputs: The inputs to the chain.
-            outputs: The outputs of the chain.
+        参数:
+            inputs: 链的输入。
+            outputs: 链的输出。
         """
         await run_in_executor(None, self.save_context, inputs, outputs)
 
     @abstractmethod
     def clear(self) -> None:
-        """Clear memory contents."""
+        """清除记忆内容。"""
 
     async def aclear(self) -> None:
-        """Async clear memory contents."""
+        """异步清除记忆内容。"""
         await run_in_executor(None, self.clear)

@@ -167,28 +167,26 @@ def create_structured_chat_agent(
     *,
     stop_sequence: Union[bool, list[str]] = True,
 ) -> Runnable:
-    """Create an agent aimed at supporting tools with multiple inputs.
+    """创建一个旨在支持多输入工具的代理。
 
-    Args:
-        llm: LLM to use as the agent.
-        tools: Tools this agent has access to.
-        prompt: The prompt to use. See Prompt section below for more.
-        stop_sequence: bool or list of str.
-            If True, adds a stop token of "Observation:" to avoid hallucinates.
-            If False, does not add a stop token.
-            If a list of str, uses the provided list as the stop tokens.
+    参数:
+        llm: 用作代理的语言模型。
+        tools: 代理可以访问的工具。
+        prompt: 要使用的提示模板。请参阅下面的提示部分了解更多信息。
+        stop_sequence: bool 或 str 列表。
+            如果为 True，添加 "Observation:" 停止标记以避免幻觉。
+            如果为 False，不添加停止标记。
+            如果是 str 列表，使用提供的列表作为停止标记。
 
-            Default is True. You may to set this to False if the LLM you are using
-            does not support stop sequences.
-        tools_renderer: This controls how the tools are converted into a string and
-            then passed into the LLM. Default is `render_text_description`.
+            默认为 True。如果您使用的 LLM 不支持停止序列，可以将其设置为 False。
+        tools_renderer: 控制如何将工具转换为字符串并传递给 LLM。
+            默认为 `render_text_description`。
 
-    Returns:
-        A Runnable sequence representing an agent. It takes as input all the same input
-        variables as the prompt passed in does. It returns as output either an
-        AgentAction or AgentFinish.
+    返回:
+        表示代理的 Runnable 序列。它接受与传入提示相同的所有输入变量。
+        它返回 AgentAction 或 AgentFinish 作为输出。
 
-    Examples:
+    示例:
 
         .. code-block:: python
 
@@ -205,7 +203,7 @@ def create_structured_chat_agent(
 
             agent_executor.invoke({"input": "hi"})
 
-            # Using with chat history
+            # 使用聊天历史
             from langchain_core.messages import AIMessage, HumanMessage
 
             agent_executor.invoke(
@@ -218,15 +216,14 @@ def create_structured_chat_agent(
                 }
             )
 
-    Prompt:
+    提示:
 
-        The prompt must have input keys:
-            * `tools`: contains descriptions and arguments for each tool.
-            * `tool_names`: contains all tool names.
-            * `agent_scratchpad`: contains previous agent actions and tool outputs as a
-              string.
+        提示必须具有以下输入键:
+            * `tools`: 包含每个工具的描述和参数。
+            * `tool_names`: 包含所有工具名称。
+            * `agent_scratchpad`: 包含先前的代理动作和工具输出作为字符串。
 
-        Here's an example:
+        以下是一个示例:
 
         .. code-block:: python
 

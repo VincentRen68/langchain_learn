@@ -1723,13 +1723,37 @@ class AgentExecutor(Chain):
         self,
         intermediate_steps: list[tuple[AgentAction, str]],
     ) -> list[tuple[AgentAction, str]]:
+        """
+        准备中间步骤列表，根据配置对步骤进行修剪。
+        
+        这个方法的主要目的是控制传递给LLM的上下文长度，防止因为中间步骤过多
+        导致上下文过长，从而影响LLM的性能和成本。
+        
+        参数:
+            intermediate_steps: 代理执行过程中的所有中间步骤列表
+                每个元素是 (AgentAction, observation) 的元组
+            
+        返回:
+            修剪后的中间步骤列表，用于传递给LLM作为上下文
+        """
+        # 情况1: 如果 trim_intermediate_steps 是正整数
+        # 只保留最近的 N 个步骤，丢弃较早的步骤
         if (
             isinstance(self.trim_intermediate_steps, int)
             and self.trim_intermediate_steps > 0
         ):
+            # 使用切片操作获取列表的最后 N 个元素
+            # 例如：intermediate_steps[-5:] 获取最后5个步骤
             return intermediate_steps[-self.trim_intermediate_steps :]
+        
+        # 情况2: 如果 trim_intermediate_steps 是可调用函数
+        # 使用自定义函数来修剪步骤（更灵活的修剪策略）
         if callable(self.trim_intermediate_steps):
+            # 调用用户提供的修剪函数，让用户自定义如何选择要保留的步骤
             return self.trim_intermediate_steps(intermediate_steps)
+        
+        # 情况3: 默认情况（trim_intermediate_steps = -1 或其他值）
+        # 不进行修剪，返回原始的完整步骤列表
         return intermediate_steps
 
     @override

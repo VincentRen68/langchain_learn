@@ -519,22 +519,21 @@ class Chain(RunnableSerializable[dict[str, Any], dict[str, Any]], ABC):
         return {**inputs, **outputs}
 
     def prep_inputs(self, inputs: Union[dict[str, Any], Any]) -> dict[str, str]:
-        """Prepare chain inputs, including adding inputs from memory.
+        """准备链输入，包括从记忆中添加输入。
 
-        Args:
-            inputs: Dictionary of raw inputs, or single input if chain expects
-                only one param. Should contain all inputs specified in
-                `Chain.input_keys` except for inputs that will be set by the chain's
-                memory.
+        参数:
+            inputs: 原始输入的字典，如果链只期望一个参数则为单个输入。
+                应包含 `Chain.input_keys` 中指定的所有输入，
+                除了将由链的记忆设置的输入。
 
-        Returns:
-            A dictionary of all inputs, including those added by the chain's memory.
+        返回:
+            包含所有输入的字典，包括由链的记忆添加的输入。
         """
         if not isinstance(inputs, dict):
             _input_keys = set(self.input_keys)
             if self.memory is not None:
-                # If there are multiple input keys, but some get set by memory so that
-                # only one is not set, we can still figure out which key it is.
+                # 如果有多个输入键，但其中一些由记忆设置，
+                # 只有一个未设置，我们仍然可以确定是哪个键。
                 _input_keys = _input_keys.difference(self.memory.memory_variables)
             inputs = {next(iter(_input_keys)): inputs}
         if self.memory is not None:

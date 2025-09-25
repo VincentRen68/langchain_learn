@@ -92,7 +92,160 @@
 #### 六、压缩 (Compression) 步骤总结
 
 *   **压缩对象**: **短期记忆**中**最旧**的部分。
-*   **触发时机**: 在一次成功的“问-答”交互**完成并存入短期记忆之后**，系统会检查短期记忆的长度。如果超过阈值，则触发压缩。
-*   **执行时间点**: **在两次大模型调用之间**，作为一种“内务管理”或“维护”任务。
+*   **触发时机**: 在一次成功的"问-答"交互**完成并存入短期记忆之后**，系统会检查短期记忆的长度。如果超过阈值，则触发压缩。
+*   **执行时间点**: **在两次大模型调用之间**，作为一种"内务管理"或"维护"任务。
 *   **核心目的**: 为**下一次**大模型调用准备一个长度可控、信息丰富的上下文，防止因上下文过长导致的错误、高成本和性能下降。
+
+#### 七、草稿本代码实现详解
+
+基于本次会话的深入分析，以下是 LangChain 草稿本在源代码中的具体实现位置和功能：
+
+##### 7.1 核心数据结构：intermediate_steps
+
+**位置**: `libs/langchain/langchain/agents/agent.py` 第1587行
+```python
+intermediate_steps: list[tuple[AgentAction, str]] = []
+```
+
+**作用**: 这是草稿本的具体实现，记录代理的完整思考轨迹。每个元素是 `(AgentAction, observation)` 元组，包含：
+- `AgentAction`: 动作信息（工具名、输入、日志等）
+- `str`: 工具执行后的观察结果
+
+**生命周期**:
+1. **初始化**: 空列表 `[]`
+2. **循环累积**: 每次LLM调用后添加新的 `(action, observation)` 对
+3. **上下文传递**: 每次LLM调用时作为草稿本传递给模型
+4. **最终输出**: 如果设置了 `return_intermediate_steps=True`，会包含在最终结果中
+5. **丢弃**: 任务完成后，草稿本被丢弃（符合"短暂"特性）
+
+##### 7.2 草稿本格式化工具
+
+**位置**: `libs/langchain/langchain/agents/format_scratchpad/log.py`
+```python
+def format_log_to_str(
+    intermediate_steps: list[tuple[AgentAction, str]],
+    observation_prefix: str = "Observation: ",
+    llm_prefix: str = "Thought: ",
+) -> str:
+```
+
+**作用**: 将 `intermediate_steps` 转换为字符串形式的草稿本，生成类似以下格式：
+```
+Thought: 我需要搜索信息
+Action: search
+Action Input: Python tutorial
+Observation: 找到了相关教程
+Thought: 
+```
+
+**使用场景**: ReAct、Structured Chat、Self-Ask 等需要字符串 scratchpad 的代理。
+
+##### 7.3 草稿本模板类
+
+**位置**: `libs/langchain/langchain/agents/schema.py`
+```python
+class AgentScratchPadChatPromptTemplate(ChatPromptTemplate):
+    def _construct_agent_scratchpad(
+        self,
+        intermediate_steps: list[tuple[AgentAction, str]],
+    ) -> str:
+```
+
+**作用**: 为聊天模型构建草稿本，添加上下文说明："This was your previous work (but I haven't seen any of it! I only see what you return as final answer)"
+
+##### 7.4 代理执行器中的草稿本处理
+
+**位置**: `libs/langchain/langchain/agents/agent.py` 的 `AgentExecutor` 类
+
+**关键方法**:
+- `_call()` (第1574行): 主要的执行循环，维护 `intermediate_steps` 列表
+- `_iter_next_step()` (第1305行): 执行思考-动作-观察循环
+- `_prepare_intermediate_steps()` (第1722行): 智能修剪中间步骤，控制上下文长度
+
+**工作流程**:
+```python
+# 1. 初始化草稿本
+intermediate_steps: list[tuple[AgentAction, str]] = []
+
+# 2. 主循环
+while self._should_continue(iterations, time_elapsed):
+    # 3. 将当前草稿本传递给LLM
+    next_step_output = self._take_next_step(..., intermediate_steps, ...)
+    
+    # 4. 将新的步骤添加到草稿本
+    intermediate_steps.extend(next_step_output)
+```
+
+##### 7.5 草稿本在提示模板中的使用
+
+**位置**: `libs/langchain/langchain/agents/chat/prompt.py`
+```python
+HUMAN_MESSAGE = "{input}\n\n{agent_scratchpad}"
+```
+
+**作用**: 将用户输入与草稿本（由 `intermediate_steps` 格式化而来）一起注入给模型，实现上下文传递。
+
+##### 7.6 现代代理实现：Runnable 管道
+
+**位置**: `libs/langchain/langchain/agents/structured_chat/base.py`
+```python
+def create_structured_chat_agent(...) -> Runnable:
+    return (
+        RunnablePassthrough.assign(
+            agent_scratchpad=lambda x: format_log_to_str(x["intermediate_steps"]),
+        )
+        | prompt
+        | llm_with_stop
+        | JSONAgentOutputParser()
+    )
+```
+
+**作用**: 使用函数式管道处理草稿本，实现：
+1. **统一接口**: 所有组件都遵循相同的调用模式
+2. **管道式组合**: 使用 `|` 操作符轻松组合多个处理步骤
+3. **声明式编程**: 描述"做什么"而不是"怎么做"
+4. **内置功能**: 异步、流式、错误处理等开箱即用
+
+##### 7.7 AgentAction 中的 log 参数
+
+**位置**: `libs/core/langchain_core/agents.py`
+```python
+class AgentAction(Serializable):
+    tool: str
+    tool_input: Union[str, dict]
+    log: str  # 存储LLM的完整原始输出
+```
+
+**作用**: `log` 参数存储了LLM的完整思考过程，包括：
+- 思考过程（`Thought:`）
+- 动作决策（`Action:`）
+- 推理逻辑
+
+**示例内容**:
+```
+Thought: 用户询问北京天气，我需要调用天气API获取信息。
+Action: weather_api
+Action Input: 北京
+```
+
+##### 7.8 草稿本与记忆系统的交互
+
+**关键转换点**: `AgentExecutor._return()` 方法
+```python
+# 草稿本 → 短期记忆的转换
+if self.memory is not None:
+    inputs = self.memory.load_memory_variables(inputs)
+    self.memory.save_context(inputs, output)  # 只有最终结果被保存
+```
+
+**重要特点**: 只有草稿本的**最终成果**（`AgentFinish`）才会被存入记忆，草稿本本身在任务完成后被完全丢弃。
+
+##### 7.9 草稿本在不同代理类型中的应用
+
+1. **ReAct 代理**: 使用字符串格式的草稿本
+2. **Structured Chat 代理**: 使用 JSON 格式的工具调用
+3. **Self-Ask with Search 代理**: 使用问答格式的草稿本
+4. **OpenAI Tools 代理**: 使用函数调用格式
+
+每种代理类型都有其特定的草稿本格式化方式，但核心概念都是相同的：**临时存储思考过程，为下一轮推理提供上下文**。
 
