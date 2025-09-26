@@ -249,3 +249,151 @@ if self.memory is not None:
 
 每种代理类型都有其特定的草稿本格式化方式，但核心概念都是相同的：**临时存储思考过程，为下一轮推理提供上下文**。
 
+#### 八、长短期记忆代码位置详细索引
+
+基于本次会话的深入分析，以下是 LangChain 框架中所有长短期记忆相关代码的详细位置索引：
+
+##### 8.1 核心抽象层
+
+**基础记忆抽象**:
+- `libs/core/langchain_core/memory.py` - `BaseMemory` 抽象基类，定义记忆的核心接口
+- `libs/langchain/langchain/memory/chat_memory.py` - `BaseChatMemory` 聊天记忆基类
+- `libs/langchain/langchain/memory/utils.py` - 记忆工具函数
+
+##### 8.2 短期记忆实现
+
+**缓冲区记忆**:
+- `libs/langchain/langchain/memory/buffer.py`
+  - `ConversationBufferMemory` - 基础对话缓冲区记忆
+  - `ConversationStringBufferMemory` - 字符串格式的缓冲区记忆（已弃用）
+
+**窗口记忆**:
+- `libs/langchain/langchain/memory/buffer_window.py`
+  - `ConversationBufferWindowMemory` - 保留最近k轮对话的窗口记忆
+
+**Token限制记忆**:
+- `libs/langchain/langchain/memory/token_buffer.py`
+  - `ConversationTokenBufferMemory` - 基于Token数量限制的记忆
+
+##### 8.3 长期记忆实现
+
+**摘要记忆**:
+- `libs/langchain/langchain/memory/summary.py`
+  - `ConversationSummaryMemory` - 持续总结对话历史的记忆
+  - `SummarizerMixin` - 摘要器混入类
+- `libs/langchain/langchain/memory/summary_buffer.py`
+  - `ConversationSummaryBufferMemory` - 结合摘要和缓冲区的混合记忆
+
+**向量存储记忆**:
+- `libs/langchain/langchain/memory/vectorstore.py`
+  - `VectorStoreRetrieverMemory` - 基于向量存储的对话历史检索记忆
+- `libs/langchain/langchain/memory/vectorstore_token_buffer_memory.py`
+  - `ConversationVectorStoreTokenBufferMemory` - 结合向量存储和Token缓冲区的记忆
+
+**实体记忆**:
+- `libs/langchain/langchain/memory/entity.py`
+  - `ConversationEntityMemory` - 从对话中提取命名实体并生成摘要的记忆
+  - `BaseEntityStore` - 实体存储抽象基类
+  - `InMemoryEntityStore` - 内存实体存储
+  - `RedisEntityStore` - Redis实体存储
+  - `UpstashRedisEntityStore` - Upstash Redis实体存储
+  - `SQLiteEntityStore` - SQLite实体存储
+
+##### 8.4 存储后端实现
+
+**聊天消息历史存储** (`libs/langchain/langchain/memory/chat_message_histories/`):
+
+**内存存储**:
+- `in_memory.py` - `InMemoryChatMessageHistory`
+
+**数据库存储**:
+- `redis.py` - `RedisChatMessageHistory`
+- `mongodb.py` - `MongoDBChatMessageHistory`
+- `postgres.py` - `PostgresChatMessageHistory`
+- `sql.py` - `SQLChatMessageHistory`
+- `singlestoredb.py` - `SingleStoreDBChatMessageHistory`
+
+**云存储**:
+- `astradb.py` - `AstraDBChatMessageHistory`
+- `cosmos_db.py` - `CosmosDBChatMessageHistory`
+- `dynamodb.py` - `DynamoDBChatMessageHistory`
+- `elasticsearch.py` - `ElasticsearchChatMessageHistory`
+- `firestore.py` - `FirestoreChatMessageHistory`
+- `momento.py` - `MomentoChatMessageHistory`
+- `neo4j.py` - `Neo4jChatMessageHistory`
+- `rocksetdb.py` - `RocksetDBChatMessageHistory`
+- `upstash_redis.py` - `UpstashRedisChatMessageHistory`
+- `xata.py` - `XataChatMessageHistory`
+- `zep.py` - `ZepChatMessageHistory`
+
+**文件存储**:
+- `file.py` - `FileChatMessageHistory`
+
+**框架集成**:
+- `streamlit.py` - `StreamlitChatMessageHistory`
+
+##### 8.5 辅助组件
+
+**组合记忆**:
+- `libs/langchain/langchain/memory/combined.py` - `CombinedMemory` 组合多个记忆源
+
+**简单记忆**:
+- `libs/langchain/langchain/memory/simple.py` - `SimpleMemory` 简单的键值对记忆
+
+**只读记忆**:
+- `libs/langchain/langchain/memory/readonly.py` - `ReadOnlySharedMemory` 只读共享记忆
+
+**知识图谱记忆**:
+- `libs/langchain/langchain/memory/kg.py` - `ConversationKGMemory` 知识图谱记忆
+
+**第三方记忆**:
+- `libs/langchain/langchain/memory/motorhead_memory.py` - `MotorheadMemory`
+- `libs/langchain/langchain/memory/zep_memory.py` - `ZepMemory`
+
+**提示模板**:
+- `libs/langchain/langchain/memory/prompt.py` - 记忆相关的提示模板
+
+##### 8.6 文档和示例
+
+**迁移指南** (`docs/docs/versions/migrating_memory/`):
+- `index.mdx` - 记忆迁移指南总览
+- `conversation_buffer_memory.ipynb` - 缓冲区记忆迁移示例
+- `conversation_buffer_window_memory.ipynb` - 窗口记忆迁移示例
+- `conversation_summary_memory.ipynb` - 摘要记忆迁移示例
+- `chat_history.ipynb` - 聊天历史使用示例
+- `long_term_memory_agent.ipynb` - 长期记忆智能体示例
+
+**教程** (`docs/docs/tutorials/`):
+- `qa_chat_history.ipynb` - 问答聊天历史
+- `chatbot.ipynb` - 聊天机器人
+- `summarization.ipynb` - 摘要功能
+
+##### 8.7 测试文件
+
+**记忆测试** (`libs/langchain/tests/unit_tests/memory/`):
+- `test_combined_memory.py` - 组合记忆测试
+- `test_imports.py` - 导入测试
+- `chat_message_histories/test_imports.py` - 聊天历史导入测试
+
+**记忆相关测试**:
+- `libs/langchain/tests/unit_tests/chains/test_summary_buffer_memory.py` - 摘要缓冲区记忆测试
+- `libs/langchain/tests/unit_tests/chains/test_memory.py` - 记忆测试
+- `libs/langchain/tests/unit_tests/schema/test_memory.py` - 记忆模式测试
+
+##### 8.8 重要说明
+
+**弃用状态**:
+- 大部分传统记忆抽象在 v0.3.1 版本已标记为弃用
+- 计划在 v1.0.0 版本中移除
+- 推荐迁移到 LangGraph 持久化功能
+
+**迁移建议**:
+1. **简单应用**: 继续使用 `RunnableWithMessageHistory` 和 `BaseChatMessageHistory`
+2. **复杂应用**: 迁移到 LangGraph 持久化
+3. **新项目**: 直接使用 LangGraph
+
+**核心接口**:
+- `load_memory_variables()` - 加载记忆变量
+- `save_context()` - 保存上下文
+- `clear()` - 清除记忆内容
+
