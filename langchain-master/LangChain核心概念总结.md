@@ -249,3 +249,153 @@ if self.memory is not None:
 
 每种代理类型都有其特定的草稿本格式化方式，但核心概念都是相同的：**临时存储思考过程，为下一轮推理提供上下文**。
 
+#### 八、SuperAgent调用SubAgent模式：双层记忆系统
+
+基于本次会话的深入分析，LangChain支持SuperAgent调用已存在的SubAgent的功能，这种模式下的记忆系统与普通工具调用模式存在根本性差异。
+
+##### 8.1 SuperAgent调用SubAgent的实现机制
+
+**核心实现**: 通过 `Runnable.as_tool()` 方法将 `AgentExecutor` 转换为 `BaseTool`
+
+**代码位置**: `libs/core/langchain_core/runnables/base.py:2512行`
+```python
+def as_tool(
+    self,
+    args_schema: Optional[type[BaseModel]] = None,
+    *,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    arg_types: Optional[dict[str, type]] = None,
+) -> BaseTool:
+    """Create a BaseTool from a Runnable."""
+```
+
+**实现原理**:
+1. `AgentExecutor` 继承自 `Chain`，而 `Chain` 继承自 `RunnableSerializable`
+2. 因此 `AgentExecutor` 是一个 `Runnable` 对象
+3. 通过 `as_tool()` 方法可以将其转换为工具，供其他代理调用
+
+##### 8.2 双层记忆系统架构
+
+**SuperAgent层记忆**:
+- **草稿本**: 记录高层决策过程（调用哪个SubAgent）
+- **短期记忆**: 记录与用户的完整对话历史
+- **长期记忆**: 压缩SuperAgent层的对话历史
+
+**SubAgent层记忆**:
+- **草稿本**: 记录SubAgent内部的思考过程
+- **短期记忆**: 记录SubAgent内部的交互历史
+- **长期记忆**: 压缩SubAgent层的交互历史
+
+**关键特点**:
+- 两层记忆系统**完全隔离**，互不干扰
+- SubAgent的内部记忆对SuperAgent**完全透明**
+- SuperAgent只能看到SubAgent的最终输出
+
+##### 8.3 记忆系统隔离机制对比
+
+| 记忆层级 | SuperAgent调用SubAgent | Agent调用普通工具 |
+|---------|----------------------|------------------|
+| **草稿本** | **两层嵌套结构**<br/>- SuperAgent层：高层决策<br/>- SubAgent层：具体执行<br/>- SubAgent思考过程对SuperAgent透明 | **单层结构**<br/>- 所有思考过程在同一层级<br/>- 完整的推理链条可见<br/>- 直接的工具调用记录 |
+| **短期记忆** | **两层独立系统**<br/>- SuperAgent：用户对话历史<br/>- SubAgent：内部交互历史<br/>- 完全隔离，避免信息泄露 | **单层统一系统**<br/>- 所有交互历史统一管理<br/>- 包含工具调用的完整记录<br/>- 简单直接的记忆管理 |
+| **长期记忆** | **两层独立压缩**<br/>- 各自独立进行记忆压缩<br/>- 避免跨层记忆污染<br/>- 分层管理历史信息 | **单层统一压缩**<br/>- 统一进行记忆压缩<br/>- 包含所有交互的摘要<br/>- 简单直接的压缩策略 |
+
+##### 8.4 记忆隔离的技术实现
+
+**草稿本隔离**:
+- **生命周期隔离**: 每次Agent调用时重新创建 `intermediate_steps = []`
+- **作用域隔离**: 只在单次Agent执行周期内存在
+- **数据结构隔离**: 使用独立的 `intermediate_steps` 列表存储
+- **访问隔离**: 只有当前Agent可以访问自己的草稿本
+
+**短期记忆隔离**:
+- **实例隔离**: 每个AgentExecutor实例有独立的memory对象
+- **会话隔离**: 在同一会话中持续累积
+- **类型隔离**: 使用BaseChatMemory的不同实现
+- **访问控制**: 通过 `memory.load_memory_variables()` 访问
+
+**长期记忆隔离**:
+- **压缩隔离**: 通过LLM将历史压缩为摘要
+- **存储隔离**: 使用 `moving_summary_buffer` 独立存储
+- **触发隔离**: 只在短期记忆超限时触发
+- **持久隔离**: 可以跨会话保存和恢复
+
+##### 8.5 记忆存储位置和唯一标识
+
+**短期记忆存储**:
+- **存储位置**: `InMemoryChatMessageHistory.messages`
+- **数据结构**: `list[BaseMessage]`
+- **唯一标识**: `BaseMessage.id` (可选字段，由LLM提供商生成)
+- **代码位置**: `libs/core/langchain_core/chat_history.py:213行`
+
+**长期记忆存储**:
+- **存储位置**: `ConversationSummaryBufferMemory.moving_summary_buffer`
+- **数据结构**: `str` (压缩后的摘要文本)
+- **唯一标识**: 无直接唯一标识，通过实例引用
+- **代码位置**: `libs/langchain/langchain/memory/summary_buffer.py:28行`
+
+##### 8.6 记忆边界和转换机制
+
+**草稿本 → 短期记忆**:
+- **转换时机**: Agent调用结束时（AgentFinish）
+- **隔离机制**: 完全隔离 - 只有最终输出被保存，草稿本被丢弃
+- **代码位置**: `libs/langchain/langchain/chains/base.py:491行`
+
+**短期记忆 → 长期记忆**:
+- **转换时机**: 短期记忆超限时（prune触发）
+- **隔离机制**: 压缩隔离 - 通过LLM压缩历史信息
+- **代码位置**: `libs/langchain/langchain/memory/summary_buffer.py:114行`
+
+**长期记忆 → 短期记忆**:
+- **转换时机**: 每次Agent调用开始时
+- **隔离机制**: 上下文隔离 - 摘要作为上下文提供
+- **代码位置**: `libs/langchain/langchain/memory/summary_buffer.py:53行`
+
+##### 8.7 设计考虑和性能影响
+
+**设计考虑**:
+- **SuperAgent模式**: 适合模块化设计，各SubAgent独立维护记忆
+- **普通工具模式**: 适合统一管理，所有交互在同一记忆系统中
+- **选择依据**: 取决于系统复杂度和模块化需求
+
+**性能影响**:
+- **SuperAgent模式**: 内存使用更高（多层记忆系统），但更好的模块化
+- **普通工具模式**: 内存使用较低（单层记忆系统），管理复杂度更低
+
+##### 8.8 实际应用示例
+
+**创建SubAgent**:
+```python
+# 创建数学计算SubAgent
+math_subagent = AgentExecutor(agent=math_agent, tools=math_tools)
+
+# 创建天气查询SubAgent  
+weather_subagent = AgentExecutor(agent=weather_agent, tools=weather_tools)
+```
+
+**转换为工具**:
+```python
+# 将SubAgent转换为工具
+math_tool = math_subagent.as_tool(
+    name="math_expert",
+    description="专门处理数学计算问题的专家代理"
+)
+
+weather_tool = weather_subagent.as_tool(
+    name="weather_expert", 
+    description="专门处理天气查询问题的专家代理"
+)
+```
+
+**SuperAgent使用SubAgent**:
+```python
+# SuperAgent的工具列表（包含SubAgent转换的工具）
+superagent_tools = [math_tool, weather_tool]
+
+# 创建SuperAgent
+superagent = create_react_agent(llm, superagent_tools, prompt)
+superagent_executor = AgentExecutor(agent=superagent, tools=superagent_tools)
+```
+
+这种双层记忆系统设计使得LangChain能够构建复杂的多代理系统，实现代理之间的协作和层次化管理，同时保持各层记忆系统的独立性和隔离性。
+
